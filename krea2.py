@@ -194,21 +194,31 @@ def _enhanced_txtfusion_forward(txtfusion, x, mask=None, transformer_options=Non
     return out
 
 
-def krea2t_enhancer_wrapper(executor, x, timesteps, context, attention_mask=None, transformer_options=None, **kwargs):
+def krea2t_enhancer_wrapper(executor, *args, **kwargs):
+    transformer_options = kwargs.get("transformer_options")
+
+    if transformer_options is None and len(args) >= 5:
+        transformer_options = args[4]
+
     transformer_options = transformer_options or {}
-    cfg = transformer_options.get("vantage_krea2_prompt_adherence_enhancer", {})
+
+    cfg = transformer_options.get(
+        "vantage_krea2_prompt_adherence_enhancer", {}
+    )
+
     if not cfg or not cfg.get("enabled", True):
-        return executor(x, timesteps, context, attention_mask, transformer_options, **kwargs)
+        return executor(*args, **kwargs)
+
     if cfg.get("_active", False):
-        return executor(x, timesteps, context, attention_mask, transformer_options, **kwargs)
+        return executor(*args, **kwargs)
 
     dm = executor.class_obj
     if not _is_krea2_dm(dm):
-        return executor(x, timesteps, context, attention_mask, transformer_options, **kwargs)
+        return executor(*args, **kwargs)
 
     strength = _bounded_float(cfg.get("strength", 1.0), 1.0, 0.0, 1.0)
     if strength == 0.0:
-        return executor(x, timesteps, context, attention_mask, transformer_options, **kwargs)
+        return executor(*args, **kwargs)
 
     txtfusion = dm.txtfusion
     original_forward = txtfusion.forward
@@ -230,7 +240,7 @@ def krea2t_enhancer_wrapper(executor, x, timesteps, context, attention_mask=None
     try:
         cfg["_active"] = True
         txtfusion.forward = enhanced_forward
-        return executor(x, timesteps, context, attention_mask, transformer_options, **kwargs)
+        return executor(*args, **kwargs)
     finally:
         cfg["_active"] = False
         txtfusion.forward = original_forward
